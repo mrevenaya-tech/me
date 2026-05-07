@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metafora Puzzle Master - Game Edukasi</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --secondary: #f5a623;
+            --success: #7ed321;
+            --error: #ff5e5e;
+            --bg: #eef2f7;
+            --card-bg: #ffffff;
+            --text: #333;
+            --disabled: #a0a0a0;
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            background-image: radial-gradient(#d1d9e6 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- UI Screens --- */
+        .screen {
+            display: none;
+            width: 100%;
+            max-width: 1000px;
+            padding: 20px;
+            text-align: center;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Header & Progress --- */
+        .header {
+            width: 100%;
+            background: white;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .stats-item {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: var(--primary);
+        }
+
+        #current-score.minus {
+            color: var(--error);
+        }
+
+        .progress-container {
+            width: 200px;
+            height: 15px;
+            background: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--success);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* --- Game Area --- */
+        .game-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 30px;
+            perspective: 1000px;
+        }
+
+        @media (max-width: 768px) {
+            .game-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+
+        .column-title {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* --- Items Styling --- */
+        .drag-item {
+            background: var(--card-bg);
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            cursor: grab;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+            font-weight: 600;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 70px;
+            position: relative;
+        }
+
+        .drag-item.frozen {
+            background: #e0e0e0;
+            border-color: var(--disabled);
+            color: #777;
+            cursor: not-allowed;
+            filter: grayscale(1);
+            opacity: 0.7;
+        }
+
+        .drag-item.frozen::after {
+            content: "❄️ DIBEKUKAN";
+            font-size: 0.7rem;
+            color: #555;
+            margin-top: 5px;
+        }
+
+        .attempt-dots {
+            display: flex;
+            gap: 4px;
+            margin-top: 5px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ddd;
+            border: 1px solid #ccc;
+        }
+
+        .dot.used {
+            background: var(--error);
+            border-color: #c0392b;
+        }
+
+        .drag-item:active:not(.frozen) {
+            cursor: grabbing;
+        }
+
+        .drag-item.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+
+        .drop-zone {
+            background: rgba(255, 255, 255, 0.5);
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            min-height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .drop-zone.over {
+            border-color: var(--primary);
+            background: rgba(74, 144, 226, 0.1);
+        }
+
+        .drop-zone.correct {
+            border-color: var(--success);
+            background: rgba(126, 211, 33, 0.1);
+            border-style: solid;
+        }
+
+        .drop-zone.wrong {
+            animation: shake 0.4s ease;
+            border-color: var(--error);
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .meaning-label {
+            color: #777;
+            font-style: italic;
+            pointer-events: none;
+        }
+
+        /* --- Buttons --- */
+        .btn {
+            padding: 15px 35px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+
+        /* --- Start & Finish --- */
+        .hero-img {
+            width: 120px;
+            margin-bottom: 20px;
+        }
+
+        .finish-card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .badge {
+            font-size: 3rem;
+            margin: 20px 0;
+            display: block;
+        }
+
+        /* --- Floating Score Popups --- */
+        .score-popup {
+            position: absolute;
+            font-weight: bold;
+            font-size: 1.2rem;
+            pointer-events: none;
+            animation: floatUp 0.8s ease-out forwards;
+            z-index: 1000;
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-40px); }
+        }
+
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <!-- Header Stats -->
+    <div id="game-header" class="header" style="display: none;">
+        <div class="stats-item">Skor: <span id="current-score">0</span></div>
+        <div class="progress-wrapper">
+            <div class="progress-container">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <div style="font-size: 0.8rem; text-align: center; margin-top: 5px;">
+                Kemajuan: <span id="progress-text">0/0</span>
+            </div>
+        </div>
+        <div class="stats-item" id="timer-display">Waktu: 00:00</div>
+    </div>
+
+    <!-- START SCREEN -->
+    <div id="start-screen" class="screen active">
+        <svg class="hero-img" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="45" fill="#4a90e2"/>
+            <path d="M30 40 L70 40 M30 50 L70 50 M30 60 L50 60" stroke="white" stroke-width="5" stroke-linecap="round"/>
+            <circle cx="75" cy="75" r="15" fill="#f5a623"/>
+            <text x="70" y="82" fill="white" font-size="20" font-weight="bold">?</text>
+        </svg>
+        <h1>METAFORA PUZZLE MASTER</h1>
+        <p>Mari belajar Majas Metafora dengan sistem tantangan baru!</p>
+        <div style="background: #fff; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; border-left: 5px solid var(--secondary); text-align: left;">
+            <strong>Aturan Permainan:</strong><br>
+            ✅ Benar: <strong>+10 Poin</strong><br>
+            ❌ Salah: <strong>-5 Poin</strong><br>
+            ❄️ <strong>Sistem Beku:</strong> Kamu hanya punya <strong>3 kesempatan</strong> salah untuk setiap kata. Jika salah 3 kali, kata akan dibekukan dan dianggap gagal!
+        </div>
+        <button class="btn btn-primary" onclick="startGame()">MULAI BERMAIN</button>
+    </div>
+
+    <!-- GAMEPLAY SCREEN -->
+    <div id="game-screen" class="screen">
+        <div class="game-grid">
+            <div>
+                <div class="column-title">🧩 Ungkapan Metafora</div>
+                <div id="drag-container"></div>
+            </div>
+            <div>
+                <div class="column-title">🎯 Makna Sebenarnya</div>
+                <div id="drop-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FINISH SCREEN -->
+    <div id="finish-screen" class="screen">
+        <div class="finish-card">
+            <h1 id="result-title">Selesai!</h1>
+            <span id="result-badge" class="badge">🏆</span>
+            <div style="font-size: 1.5rem; margin: 20px 0;">
+                Skor Akhir: <strong id="final-score">0</strong>
+            </div>
+            <div id="rank-tag" style="padding: 10px; border-radius: 5px; background: #eee; font-weight: bold; margin-bottom: 20px;">
+                Pangkat: Menghitung...
+            </div>
+            <button class="btn btn-success" onclick="location.reload()">MAIN LAGI</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA SOAL ---
+        const puzzleData = [
+            { id: 1, text: "Bintang Kelas", meaning: "Siswa paling pintar" },
+            { id: 2, text: "Tulang Punggung", meaning: "Pencari nafkah utama" },
+            { id: 3, text: "Otak Encer", meaning: "Mudah memahami sesuatu" },
+            { id: 4, text: "Buah Hati", meaning: "Anak tercinta" },
+            { id: 5, text: "Kutu Buku", meaning: "Orang yang suka membaca" },
+            { id: 6, text: "Meja Hijau", meaning: "Pengadilan" },
+            { id: 7, text: "Anak Emas", meaning: "Orang kesayangan" },
+            { id: 8, text: "Raja Sehari", meaning: "Pengantin" },
+            { id: 9, text: "Lautan Manusia", meaning: "Sangat banyak orang" },
+            { id: 10, text: "Kambing Hitam", meaning: "Orang yang dipersalahkan" },
+            { id: 11, text: "Tangan Kanan", meaning: "Orang kepercayaan" },
+            { id: 12, text: "Hati Batu", meaning: "Tidak punya rasa iba" },
+            { id: 13, text: "Muka Tembok", meaning: "Tidak punya malu" },
+            { id: 14, text: "Panggung Sandiwara", meaning: "Hidup penuh kepura-puraan" },
+            { id: 15, text: "Sampah Masyarakat", meaning: "Orang yang tidak berguna" },
+            { id: 16, text: "Dewi Malam", meaning: "Bulan" },
+            { id: 17, text: "Si Jago Merah", meaning: "Api kebakaran" },
+            { id: 18, text: "Kepala Dingin", meaning: "Sikap yang tenang" },
+            { id: 19, text: "Bunga Desa", meaning: "Gadis tercantik di desa" },
+            { id: 20, text: "Kabar Angin", meaning: "Berita yang belum pasti" }
+        ];
+
+        // --- GAME STATE ---
+        let score = 0;
+        let completedCount = 0;
+        const batchSize = 10;
+        let timerSeconds = 0;
+        let timerInterval;
+        const maxAttempts = 3;
+        let itemAttempts = {}; // { id: count }
+
+        // --- AUDIO ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playTone(freq, type, duration) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        const sounds = {
+            correct: () => { playTone(523, 'sine', 0.3); setTimeout(() => playTone(659, 'sine', 0.3), 100); },
+            wrong: () => { playTone(180, 'sawtooth', 0.3); },
+            freeze: () => { playTone(100, 'square', 0.5); },
+            victory: () => { [523, 659, 783, 1046].forEach((n, i) => setTimeout(() => playTone(n, 'sine', 0.5), i * 150)); }
+        };
+
+        // --- CORE FUNCTIONS ---
+        function startGame() {
+            document.getElementById('start-screen').classList.remove('active');
+            document.getElementById('game-screen').classList.add('active');
+            document.getElementById('game-header').style.display = 'flex';
+            initBatch();
+            startTimer();
+        }
+
+        function initBatch() {
+            const dragContainer = document.getElementById('drag-container');
+            const dropContainer = document.getElementById('drop-container');
+            dragContainer.innerHTML = '';
+            dropContainer.innerHTML = '';
+
+            const selected = [...puzzleData].sort(() => 0.5 - Math.random()).slice(0, batchSize);
+            const shuffledMeanings = [...selected].sort(() => 0.5 - Math.random());
+
+            selected.forEach(item => {
+                itemAttempts[item.id] = 0;
+                
+                const el = document.createElement('div');
+                el.className = 'drag-item';
+                el.draggable = true;
+                el.id = `item-${item.id}`;
+                el.dataset.id = item.id;
+                
+                // Content
+                const textSpan = document.createElement('span');
+                textSpan.innerText = item.text;
+                el.appendChild(textSpan);
+
+                // Attempt indicators
+                const dotsDiv = document.createElement('div');
+                dotsDiv.className = 'attempt-dots';
+                for(let i=0; i<maxAttempts; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'dot';
+                    dotsDiv.appendChild(dot);
+                }
+                el.appendChild(dotsDiv);
+
+                el.addEventListener('dragstart', e => {
+                    if (el.classList.contains('frozen')) {
+                        e.preventDefault();
+                        return;
+                    }
+                    e.target.classList.add('dragging');
+                    e.dataTransfer.setData('text/plain', e.target.dataset.id);
+                });
+                el.addEventListener('dragend', e => e.target.classList.remove('dragging'));
+                dragContainer.appendChild(el);
+            });
+
+            shuffledMeanings.forEach(item => {
+                const zone = document.createElement('div');
+                zone.className = 'drop-zone';
+                zone.dataset.matchId = item.id;
+                zone.innerHTML = `<span class="meaning-label">${item.meaning}</span>`;
+                zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+                zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+                zone.addEventListener('drop', handleDrop);
+                dropContainer.appendChild(zone);
+            });
+
+            updateProgress();
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            this.classList.remove('over');
+            const targetId = e.dataTransfer.getData('text/plain');
+            const matchId = this.dataset.matchId;
+            const dragItem = document.getElementById(`item-${targetId}`);
+
+            if (!dragItem || dragItem.classList.contains('frozen') || this.classList.contains('correct')) return;
+
+            if (targetId === matchId) {
+                // BENAR
+                sounds.correct();
+                this.classList.add('correct');
+                this.innerHTML = `<strong>${dragItem.querySelector('span').innerText}</strong>`;
+                dragItem.style.display = 'none';
+                
+                updateScore(10, e.clientX, e.clientY);
+                completedCount++;
+                updateProgress();
+                checkGameOver();
+            } else {
+                // SALAH
+                itemAttempts[targetId]++;
+                const currentAttempts = itemAttempts[targetId];
+                
+                // Update dots
+                const dots = dragItem.querySelectorAll('.dot');
+                if (dots[currentAttempts - 1]) dots[currentAttempts - 1].classList.add('used');
+
+                updateScore(-5, e.clientX, e.clientY);
+                
+                if (currentAttempts >= maxAttempts) {
+                    // BEKU
+                    sounds.freeze();
+                    dragItem.classList.add('frozen');
+                    dragItem.draggable = false;
+                    completedCount++; // Hitung sebagai selesai (tapi gagal)
+                    updateProgress();
+                    checkGameOver();
+                } else {
+                    sounds.wrong();
+                    this.classList.add('wrong');
+                    setTimeout(() => this.classList.remove('wrong'), 400);
+                }
+            }
+        }
+
+        function checkGameOver() {
+            if (completedCount === batchSize) {
+                setTimeout(showFinish, 1200);
+            }
+        }
+
+        function updateScore(points, x, y) {
+            score += points;
+            const scoreEl = document.getElementById('current-score');
+            scoreEl.innerText = score;
+            if (score < 0) scoreEl.classList.add('minus');
+            else scoreEl.classList.remove('minus');
+
+            const popup = document.createElement('div');
+            popup.className = 'score-popup';
+            popup.innerText = points > 0 ? `+${points}` : points;
+            popup.style.color = points > 0 ? 'var(--success)' : 'var(--error)';
+            popup.style.left = `${x}px`;
+            popup.style.top = `${y}px`;
+            document.body.appendChild(popup);
+            setTimeout(() => popup.remove(), 800);
+        }
+
+        function updateProgress() {
+            const percent = (completedCount / batchSize) * 100;
+            document.getElementById('progress-bar').style.width = `${percent}%`;
+            document.getElementById('progress-text').innerText = `${completedCount}/${batchSize}`;
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timerSeconds++;
+                const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+                const secs = (timerSeconds % 60).toString().padStart(2, '0');
+                document.getElementById('timer-display').innerText = `Waktu: ${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function showFinish() {
+            clearInterval(timerInterval);
+            document.getElementById('game-screen').classList.remove('active');
+            document.getElementById('finish-screen').classList.add('active');
+            document.getElementById('game-header').style.display = 'none';
+            document.getElementById('final-score').innerText = score;
+            
+            let rank = "";
+            let badge = "";
+            if (score >= 80) { rank = "Ahli Metafora Sejati 🏆"; badge = "👑"; }
+            else if (score >= 40) { rank = "Pemburu Makna ⭐"; badge = "🌟"; }
+            else if (score >= 0) { rank = "Pelajar Gigih 📘"; badge = "📚"; }
+            else { rank = "Butuh Remedial ❄️"; badge = "🧐"; }
+            
+            document.getElementById('rank-tag').innerText = `Pangkat: ${rank}`;
+            document.getElementById('result-badge').innerText = badge;
+            
+            sounds.victory();
+            startConfetti();
+        }
+
+        function startConfetti() {
+            const canvas = document.getElementById('confetti-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const particles = [];
+            for (let i = 0; i < 100; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height - canvas.height,
+                    size: Math.random() * 10 + 5,
+                    color: `hsl(${Math.random() * 360}, 70%, 60%)`,
+                    speed: Math.random() * 3 + 2,
+                    angle: Math.random() * 6
+                });
+            }
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach(p => {
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(p.x, p.y, p.size, p.size);
+                    p.y += p.speed;
+                    p.x += Math.sin(p.angle);
+                    if (p.y > canvas.height) p.y = -20;
+                });
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+    </script>
+</body>
+</html>
